@@ -1,0 +1,1153 @@
+{
+  "name": "KI-Servicedesk-Pilot – Hauptworkflow",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Anfrage an Service Desk",
+        "formDescription": "Anfrage",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Produktionskritisch",
+              "fieldType": "checkbox",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Produktion steht"
+                  },
+                  {
+                    "option": "Problem mit Produktionsmaschine"
+                  },
+                  {
+                    "option": "IT Problem am PC/Drucker"
+                  },
+                  {
+                    "option": "anderes"
+                  }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Standort",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Gerät",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Problem",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Fehlernummer"
+            },
+            {
+              "fieldLabel": "Problembeschreibung",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Mailadresse",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Name"
+            },
+            {
+              "fieldLabel": "Abteilung"
+            },
+            {
+              "fieldLabel": "Datum",
+              "fieldType": "date",
+              "defaultValue": "={{ $now.toFormat('yyyy-MM-dd') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        192,
+        -80
+      ],
+      "id": "803471eb-53d1-4e31-9e5a-f3ec198db8ec",
+      "name": "On form submission",
+      "webhookId": "afadd584-838b-4620-ae8f-9d70be0bd390"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{\n{\n  \"ticket_id\": \"PILOT-\" + $execution.id,\n  \"eingang\": $json[\"submittedAt\"],\n  \"datum\": $json[\"Datum\"] ?? \"\",\n  \"kanal\": \"Formular\",\n  \"testmodus\": $json[\"formMode\"] === \"test\",\n\n  \"name\": $json[\"Name\"] ?? \"\",\n  \"email\": $json[\"Mailadresse\"] ?? \"\",\n  \"abteilung\": $json[\"Abteilung\"] ?? \"\",\n  \"standort\": $json[\"Standort\"] ?? \"\",\n  \"geraet\": $json[\"Gerät\"] ?? \"\",\n\n  \"problem\": $json[\"Problem\"] ?? \"\",\n  \"fehlernummer\": $json[\"Fehlernummer\"] ?? \"\",\n  \"beschreibung\": $json[\"Problembeschreibung\"] ?? \"\",\n\n  \"produktionskritisch_auswahl\": ($json[\"Produktionskritisch\"] ?? []).join(\", \"),\n  \"produktionskritisch\": /produktion|maschine|anlage|steht/i.test(($json[\"Produktionskritisch\"] ?? []).join(\" \")),\n\n  \"suchtext\": [$json[\"Problem\"], $json[\"Fehlernummer\"], $json[\"Gerät\"], $json[\"Problembeschreibung\"]]\n               .filter(x => x).join(\" \").toLowerCase().trim(),\n\n  \"sensibel\": /kündig|personal|gehalt|lohn|krank|abmahnung|betriebsrat|personalakte|bewerbung/i\n               .test(($json[\"Problem\"] ?? \"\") + \" \" + ($json[\"Problembeschreibung\"] ?? \"\"))\n}\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        336,
+        -80
+      ],
+      "id": "d620fa42-8589-4fb6-8869-0464d64c1169",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "format": "resolved",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2.2,
+      "position": [
+        192,
+        96
+      ],
+      "id": "0a5a52ae-799b-4225-bd72-d7975813defa",
+      "name": "Email Trigger (IMAP)",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{\n{\n  \"ticket_id\": \"PILOT-\" + $execution.id,\n  \"eingang\": $json.date ?? $now.toISO(),\n  \"datum\": $now.toFormat(\"yyyy-MM-dd\"),\n  \"kanal\": \"E-Mail\",\n  \"testmodus\": false,\n\n  \"name\": $json.from?.value?.[0]?.name ?? \"\",\n  \"email\": $json.from?.value?.[0]?.address ?? \"\",\n  \"abteilung\": \"\",\n  \"standort\": \"\",\n  \"geraet\": \"\",\n\n  \"problem\": /passwort|gesperrt|anmeld|login/i.test(($json.subject ?? \"\") + ($json.text ?? \"\")) ? \"Passwort-Selbsthilfe\"\n           : /scan|drucker|druck/i.test(($json.subject ?? \"\") + ($json.text ?? \"\")) ? \"Drucker/Scanner\"\n           : /outlook|teams|mail|onedrive/i.test(($json.subject ?? \"\") + ($json.text ?? \"\")) ? \"M365\"\n           : \"Sonstiges\",\n  \"fehlernummer\": ((($json.subject ?? \"\") + \" \" + ($json.text ?? \"\")).match(/\\b[A-Z]\\d{3,4}\\b/) ?? [\"\"])[0],\n  \"beschreibung\": (($json.subject ?? \"\") + \" – \" + ($json.text ?? \"\")).slice(0, 1000),\n\n  \"produktionskritisch_auswahl\": \"\",\n  \"produktionskritisch\": /produktion|maschine|anlage|steht/i.test(($json.subject ?? \"\") + ($json.text ?? \"\")),\n\n  \"suchtext\": (($json.subject ?? \"\") + \" \" + ($json.text ?? \"\")).toLowerCase().slice(0, 300),\n  \"sensibel\": /kündig|gehalt|lohn|krank|abmahnung|betriebsrat|personalakte|bewerbung/i.test(($json.subject ?? \"\") + ($json.text ?? \"\"))\n}\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        336,
+        96
+      ],
+      "id": "d24283ce-fdb9-4835-b384-c1ce3b6533be",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "content": "Trigger: Anfrage",
+        "height": 400,
+        "width": 160
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        160,
+        -160
+      ],
+      "id": "bbf167ec-8e58-47be-875b-f0a682a0ba46",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "NOTION_DATENBANK_ID_WISSENSDATENBANK",
+          "mode": "id"
+        },
+        "limit": 5,
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Status|rich_text",
+              "condition": "equals",
+              "richTextValue": "freigegeben"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        704,
+        128
+      ],
+      "id": "3fb2da0f-94c2-4556-94fc-bb1ef349b8a8",
+      "name": "Get many database pages",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "content": "findet alle freigegebenen Artikel",
+        "height": 240,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        640,
+        80
+      ],
+      "id": "71f5c6b3-c8a3-43a0-9f83-87c1237bfdd3",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Suchtext der Anfrage (kommt aus dem IF \"sensibel?\")\nconst text = ($('If').first().json.suchtext || '').toLowerCase();\n\n// Füllwörter ignorieren\nconst stopp = ['der','die','das','und','nicht','nit','ist','geht','kommt','mit','bei',\n  'von','ein','eine','ich','mein','meine','kein','keine','mehr','auch','wird','im','in'];\nconst anfrageWoerter = text.split(/[^a-z0-9äöüß-]+/)\n  .filter(w => w.length >= 3 && !stopp.includes(w));\n\n// Notion-Spalte über Namensteil finden (Simplify benennt die Spalten um)\nconst feld = (p, teil) => {\n  const k = Object.keys(p).find(k => k.toLowerCase().includes(teil));\n  return k ? String(p[k] ?? '').toLowerCase() : '';\n};\n\nconst kandidaten = [];\nfor (const item of $input.all()) {\n  const p = item.json;\n  if (!p.id) continue; // leeres Item = nichts gefunden\n\n  const schlagwoerter = feld(p, 'schlag').split(/[,;]/).map(w => w.trim()).filter(Boolean);\n  const kontext = [feld(p, 'name'), feld(p, 'titel'), feld(p, 'fehlerbild'), feld(p, 'kategorie')].join(' ');\n\n  let score = 0;\n  const gefunden = [];\n  for (const sw of schlagwoerter) {               // Schlagwort steht in der Anfrage: +2\n    if (text.includes(sw)) { score += 2; gefunden.push(sw); }\n  }\n  for (const w of anfrageWoerter) {               // Anfragewort steht in Titel/Fehlerbild: +1\n    if (kontext.includes(w) && !gefunden.includes(w)) { score += 1; gefunden.push(w); }\n  }\n  kandidaten.push({ ...p, score, gefunden });\n}\n\nkandidaten.sort((a, b) => b.score - a.score);\n\nconst top3 = kandidaten.filter(k => k.score > 0).slice(0, 3);   // immer bis zu 3 anzeigen\nconst treffer = (top3[0]?.score ?? 0) >= 2;                     // Treffer nur ab Score 2\n\nreturn [{\n  json: {\n    treffer,\n    anzahl: top3.length,\n    top3_liste: top3.map((k, i) =>\n      `${i + 1}. ${k.name} (Score ${k.score}: ${k.gefunden.join(', ')})`).join('\\n'),\n    top3: top3.map(k => ({\n      name: k.name,\n      score: k.score,\n      gefunden: k.gefunden,\n      fehlerbild: k.property_fehlerbild,\n      loesung: k.property_lösung_schritte,\n      eskalation: k.property_eskalation_wenn,\n      url: k.url\n    }))\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        928,
+        128
+      ],
+      "id": "8c981af6-af55-427f-8edd-c745b3ea4c1f",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "content": "die drei relevantesten Artikel in einem Item",
+        "height": 240,
+        "width": 176,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        896,
+        80
+      ],
+      "id": "b8ecb6eb-77b1-495f-a4fa-c8d5b151f017",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "5bf2f5d8-8ae8-47b2-9e15-3a6cb8ae3b1c",
+              "leftValue": "={{ $json.treffer }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1120,
+        128
+      ],
+      "id": "068380e0-b3a5-4355-b461-d5bd184e9543",
+      "name": "If - Treffer in Database"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=ANFRAGE\nProblem: {{ $('If').first().json.problem }}\nGerät: {{ $('If').first().json.geraet }}\nFehlernummer: {{ $('If').first().json.fehlernummer }}\nBeschreibung: {{ $('If').first().json.beschreibung }}\n\nWISSENSARTIKEL (nach Relevanz sortiert)\n{{ $json.top3.map((a, i) => `${i+1}. ${a.name}\\nFehlerbild: ${a.fehlerbild}\\nLösung: ${a.loesung}\\nEskalation: ${a.eskalation}`).join('\\n\\n') }}",
+        "options": {
+          "systemMessage": "Du bist Assistent im IT-Service-Desk eines Industrieunternehmens und formulierst\neine Antwort-E-Mail an eine Mitarbeiterin oder einen Mitarbeiter ohne IT-Kenntnisse.\n\nINHALT\n- Die fachlichen Schritte stammen ausschließlich aus dem passendsten Wissensartikel.\n- Du darfst sie umformulieren, vereinfachen, zusammenfassen und in eine sinnvolle\n  Reihenfolge bringen – aber keine neuen Schritte, Ursachen oder Zusagen erfinden.\n- Fachbegriffe kurz erklären (z. B. \"Quarantäne = Sperrbereich für verdächtige Mails\").\n- Beziehe dich auf die konkrete Anfrage (Gerät, Fehlernummer), wenn angegeben.\n\nSTIL\n- Sie-Form, freundlich, ruhig, kurz.\n- Aufbau:\n  1. Ein Satz, der das Problem in eigenen Worten aufgreift.\n  2. \"Bitte probieren Sie Folgendes:\" + nummerierte Schritte, je Schritt ein kurzer Satz.\n  3. Ein Satz zum Eskalationsfall: \"Falls das nicht hilft, …\"\n  4. \"Viele Grüße\n     Ihr IT-Service-Desk\"\n- Keine Anrede mit Namen (wird später ergänzt), kein Markdown (keine **, keine #).\n\nPasst kein Artikel, antworte nur: KEIN PASSENDER ARTIKEL\n\nFormat:\nVERWENDETER ARTIKEL: <Name>\nANTWORT:\n<Text>"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1280,
+        -144
+      ],
+      "id": "faaf88dd-98a9-4dbb-9f95-b24160994b0a",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        16
+      ],
+      "id": "4ffcc64e-a736-438b-ac76-3822f9b44f3b",
+      "name": "Groq Chat Model"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "NOTION_DATENBANK_ID_OFFENE_FREIGABEN",
+          "mode": "id"
+        },
+        "title": "={{ $('If').first().json.ticket_id }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Ticket ID|title",
+              "title": "={{ $('Edit Fields').item.json.ticket_id }}"
+            },
+            {
+              "key": "erstellt am|date",
+              "date": "={{ $('Edit Fields').item.json.eingang }}"
+            },
+            {
+              "key": "Problem|rich_text",
+              "textContent": "={{ $('Edit Fields').item.json.problem }}"
+            },
+            {
+              "key": "Formular-Link|url",
+              "urlValue": "={{ $execution.resumeFormUrl }}"
+            },
+            {
+              "key": "Status|select",
+              "selectValue": "offen"
+            },
+            {
+              "key": "Art|select",
+              "selectValue": "Freigabe"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        1536,
+        -144
+      ],
+      "id": "32d20754-ffb2-4c60-afde-3df831e5b8ee",
+      "name": "Create a database page - offene Freigaben"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "dd6fa83d-0d95-4f5e-8363-bfb53c93564f",
+              "leftValue": "={{ $json.sensibel }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        480,
+        0
+      ],
+      "id": "2ccea768-e29a-41eb-a315-662ed85d5e91",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "resume": "form",
+        "formTitle": "=Freigabe {{ $('If').first().json.ticket_id }}",
+        "formDescription": "=Anfrage: {{ $('If').first().json.problem }} – {{ $('If').first().json.beschreibung }}\n\nGefundene Artikel:\n{{ $('If - Treffer in Database').first().json.top3_liste }}\n\nKI-Vorschlag:\n{{ $('AI Agent').first().json.output }}",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Entscheidung",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "freigeben"
+                  },
+                  {
+                    "option": "ablehnen"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Verwendeter Artikel",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "1"
+                  },
+                  {
+                    "option": "2"
+                  },
+                  {
+                    "option": "3"
+                  },
+                  {
+                    "option": "kein passender"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "korrigierter Text"
+            }
+          ]
+        },
+        "limitWaitTime": true,
+        "resumeAmount": 3,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1664,
+        -144
+      ],
+      "id": "950a7beb-d371-45dc-a538-ec8ab1909cdb",
+      "name": "Wait",
+      "webhookId": "65e412ff-6995-40f3-a613-ba7a4761e779"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6b516cdc-29c5-4e3c-ba4f-af5a31361f63",
+              "leftValue": "={{ $json.Entscheidung }}",
+              "rightValue": "=freigeben",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1808,
+        -144
+      ],
+      "id": "dbad3b69-554b-4246-8ee4-178044d75d03",
+      "name": "If-Freigegeben"
+    },
+    {
+      "parameters": {
+        "resume": "form",
+        "formTitle": "=Lösung First Level {{ $('If').first().json.ticket_id }}",
+        "formDescription": "=Ticket: {{ $('If').first().json.ticket_id }}\nName: {{ $('If').first().json.name }} ({{ $('If').first().json.abteilung }})\nStandort: {{ $('If').first().json.standort }}\nGerät: {{ $('If').first().json.geraet }}\nFehlernummer: {{ $('If').first().json.fehlernummer }}\nProduktionskritisch: {{ $('If').first().json.produktionskritisch_auswahl }}\nProblem: {{ $('If').first().json.problem }}\nBeschreibung: {{ $('If').first().json.beschreibung }}",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Gelöst?",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "gelöst"
+                  },
+                  {
+                    "option": "nicht gelöst"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Lösung",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "als Wissensartikel geeignet?",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "geeignet als Wissensartikel"
+                  },
+                  {
+                    "option": "nicht geeignet"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "limitWaitTime": true,
+        "resumeAmount": 8,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1680,
+        208
+      ],
+      "id": "d413a692-163d-4f84-a332-ab8946e5d597",
+      "name": "Wait1",
+      "webhookId": "65e412ff-6995-40f3-a613-ba7a4761e779"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "NOTION_DATENBANK_ID_OFFENE_FREIGABEN",
+          "mode": "id"
+        },
+        "title": "={{ $('If').first().json.ticket_id }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Ticket ID|title",
+              "title": "={{ $('Edit Fields').item.json.ticket_id }}"
+            },
+            {
+              "key": "erstellt am|date",
+              "date": "={{ $('Edit Fields').item.json.eingang }}"
+            },
+            {
+              "key": "Problem|rich_text",
+              "textContent": "={{ $('Edit Fields').item.json.problem }}"
+            },
+            {
+              "key": "Formular-Link|url",
+              "urlValue": "={{ $execution.resumeFormUrl }}"
+            },
+            {
+              "key": "Status|select",
+              "selectValue": "offen"
+            },
+            {
+              "key": "Art|select",
+              "selectValue": "Lösung First Level"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        1536,
+        208
+      ],
+      "id": "f4a3ff1d-f703-4a4f-9f2e-e6131da8481a",
+      "name": "Create a database page - First Level Support"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6b516cdc-29c5-4e3c-ba4f-af5a31361f63",
+              "leftValue": "={{ $json['Gelöst?'] }}",
+              "rightValue": "=gelöst",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1840,
+        208
+      ],
+      "id": "250ffdf2-45d5-4052-9d2b-f884492053f8",
+      "name": "If-Problem gelöst?"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2032,
+        -288
+      ],
+      "id": "1c6dc4ba-8949-424c-8404-b34485de71e4",
+      "name": "Mail an Anfragende (aus Vorschlag)",
+      "webhookId": "a10e3bf8-409c-4fc4-bde4-d46c63d179f6",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "html": "=Guten Tag {{ $('If').first().json.name }},\n\n  {{ $('Wait1').first().json['Lösung'] }}\n\nViele Grüße\nIhr IT-Service-Desk",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2032,
+        80
+      ],
+      "id": "9b1ff0fc-f7a2-4954-99a1-527e73fc603b",
+      "name": "Mail an Anfragende (First Level Support)",
+      "webhookId": "a10e3bf8-409c-4fc4-bde4-d46c63d179f6",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "NOTION_DATENBANK_ID_OFFENE_FREIGABEN",
+          "mode": "id"
+        },
+        "title": "={{ $('If').first().json.ticket_id }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Ticket ID|title",
+              "title": "={{ $('Edit Fields').item.json.ticket_id }}"
+            },
+            {
+              "key": "erstellt am|date",
+              "date": "={{ $('Edit Fields').item.json.eingang }}"
+            },
+            {
+              "key": "Problem|rich_text",
+              "textContent": "={{ $('Edit Fields').item.json.problem }}"
+            },
+            {
+              "key": "Formular-Link|url",
+              "urlValue": "={{ $execution.resumeFormUrl }}"
+            },
+            {
+              "key": "Status|select",
+              "selectValue": "offen"
+            },
+            {
+              "key": "Art|select",
+              "selectValue": "Lösung Second Level"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        1536,
+        432
+      ],
+      "id": "9cbd7527-5427-462c-801d-055df1b605ba",
+      "name": "Create a database page - Second Level Support"
+    },
+    {
+      "parameters": {
+        "resume": "form",
+        "formTitle": "=Lösung Second Level {{ $('If').first().json.ticket_id }}",
+        "formDescription": "=Ticket: {{ $('If').first().json.ticket_id }}\nName: {{ $('If').first().json.name }} ({{ $('If').first().json.abteilung }})\nStandort: {{ $('If').first().json.standort }}\nGerät: {{ $('If').first().json.geraet }}\nFehlernummer: {{ $('If').first().json.fehlernummer }}\nProduktionskritisch: {{ $('If').first().json.produktionskritisch_auswahl }}\nProblem: {{ $('If').first().json.problem }}\nBeschreibung: {{ $('If').first().json.beschreibung }}\n\nBisherige Schritte First Level:\n{{ Object.entries($('Wait1').first().json).find(([k]) => /schritt|lösung/i.test(k))?.[1] ?? '– keine Angabe –' }}",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Gelöst?",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "gelöst"
+                  },
+                  {
+                    "option": "nicht gelöst"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Lösung",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "als Wissensartikel geeignet?",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "geeignet als Wissensartikel"
+                  },
+                  {
+                    "option": "nicht geeignet"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "limitWaitTime": true,
+        "resumeAmount": 8,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1696,
+        448
+      ],
+      "id": "85f8c001-53e6-4dfd-82ec-f388f2eadb23",
+      "name": "Wait2",
+      "webhookId": "65e412ff-6995-40f3-a613-ba7a4761e779"
+    },
+    {
+      "parameters": {
+        "html": "=Guten Tag {{ $('If').first().json.name }},\n\n  {{ $('Wait2').first().json['Lösung'] }}\n\nViele Grüße\nIhr IT-Service-Desk",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2048,
+        432
+      ],
+      "id": "de23b7bb-bf9e-4f38-8f97-408eaf4e3069",
+      "name": "Mail an Anfragende (Second Level Support)",
+      "webhookId": "a10e3bf8-409c-4fc4-bde4-d46c63d179f6",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "NOTION_DATENBANK_ID_WISSENSDATENBANK",
+          "mode": "id"
+        },
+        "title": "={{ $('If').first().json.problem }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Status|rich_text",
+              "textContent": "Entwurf"
+            },
+            {
+              "key": "Ursprungsticket|rich_text",
+              "textContent": "={{ $('If').first().json.ticket_id }}"
+            },
+            {
+              "key": "Fehlerbild|rich_text",
+              "textContent": "={{ $('If').first().json.beschreibung }}"
+            },
+            {
+              "key": "Lösung (Schritte)|rich_text",
+              "textContent": "={{ $('Wait2').isExecuted\n   ? Object.entries($('Wait2').first().json).find(([k]) => /schritt|lösung/i.test(k))?.[1]\n   : Object.entries($('Wait1').first().json).find(([k]) => /schritt|lösung/i.test(k))?.[1] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        2400,
+        112
+      ],
+      "id": "3e1b6506-5035-42c0-8ce6-d3ae2c7ead42",
+      "name": "Create a database page - Entwurf Artikel"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        720,
+        -224
+      ],
+      "id": "23978d58-af7a-48ae-901e-e3b4cdef8e74",
+      "name": "Mail an Anfragende -VERTRAULICH",
+      "webhookId": "a10e3bf8-409c-4fc4-bde4-d46c63d179f6",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "content": "Mail an Anfragende",
+        "height": 976,
+        "width": 208,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1984,
+        -352
+      ],
+      "id": "6fe2baae-bde5-435c-8e7a-c6e0175e0593",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "Mail an Anfragende",
+        "height": 240,
+        "width": 160,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        688,
+        -272
+      ],
+      "id": "0b50c35a-135d-45de-a77d-d045741088a1",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "54c3a130-6d3c-44c0-baa1-888c7f27c74b",
+              "leftValue": "={{ $json['als Wissensartikel geeignet?'] }}",
+              "rightValue": "geeignet als Wissensartikel",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2224,
+        128
+      ],
+      "id": "d8267f04-21db-4476-a2ee-337b30fb8ceb",
+      "name": "als Artikel geeignet?"
+    },
+    {
+      "parameters": {
+        "content": "## KI-Service-Desk-Pilot – Hauptworkflow\n**Die KI schlägt vor – Menschen entscheiden.**\n\n**Ablauf**\n1. Anfrage per Formular → Angaben + Suchtext aufbereiten\n2. Sensibel (z. B. Gehalt, Krankheit)? → direkt an Service Desk, **ohne KI**\n3. Notion: freigegebene Artikel → Code: Top 3 per Schlagwort\n4. **Treffer:** KI-Vorschlag (Groq) → Freigabe durch First Level\n5. **Kein Treffer / abgelehnt:** First Level löst – sonst Second Level\n6. Lösung geeignet? → Wissensartikel als **Entwurf** (fachliche Prüfung in Notion)\n\n**Menschliche Schritte:** Wait-Nodes mit Formular, Link in Notion „Offene Freigaben“\n**Bei Störung:** Fehler-Workflow → Eintrag in „Offene Freigaben“, manueller Prozess\n\n⚠️ Mail-Nodes deaktiviert, kein Postfach angebunden\nFiktives Übungsprojekt – keine Echtdaten",
+        "height": 332,
+        "width": 580,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        80,
+        -528
+      ],
+      "id": "f10f561c-f516-4702-81ce-f09470470cec",
+      "name": "Sticky Note5"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Trigger (IMAP)": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If - Treffer in Database",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If - Treffer in Database": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create a database page - First Level Support",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Create a database page - offene Freigaben",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Mail an Anfragende -VERTRAULICH",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get many database pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a database page - offene Freigaben": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "If-Freigegeben",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If-Freigegeben": {
+      "main": [
+        [
+          {
+            "node": "Mail an Anfragende (aus Vorschlag)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create a database page - First Level Support",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a database page - First Level Support": {
+      "main": [
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait1": {
+      "main": [
+        [
+          {
+            "node": "If-Problem gelöst?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If-Problem gelöst?": {
+      "main": [
+        [
+          {
+            "node": "Mail an Anfragende (First Level Support)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create a database page - Second Level Support",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a database page - Second Level Support": {
+      "main": [
+        [
+          {
+            "node": "Wait2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait2": {
+      "main": [
+        [
+          {
+            "node": "Mail an Anfragende (Second Level Support)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mail an Anfragende (First Level Support)": {
+      "main": [
+        [
+          {
+            "node": "als Artikel geeignet?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mail an Anfragende (Second Level Support)": {
+      "main": [
+        [
+          {
+            "node": "als Artikel geeignet?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "als Artikel geeignet?": {
+      "main": [
+        [
+          {
+            "node": "Create a database page - Entwurf Artikel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "tags": []
+}

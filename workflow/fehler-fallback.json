@@ -1,0 +1,157 @@
+{
+  "name": "KI-Servicedesk-Pilot – Fehler-Fallback",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        48,
+        352
+      ],
+      "id": "5c735ae1-93a4-47f1-80d7-02f915d00c70",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{\n{\n  \"ticket_id\": \"PILOT-\" + ($json.execution?.id ?? \"unbekannt\"),\n  \"zeitpunkt\": $now.toISO(),\n  \"workflow\": $json.workflow?.name ?? \"\",\n  \"fehler_node\": $json.execution?.lastNodeExecuted ?? $json.trigger?.error?.node?.name ?? \"unbekannt\",\n  \"fehlermeldung\": String($json.execution?.error?.message ?? $json.trigger?.error?.message ?? \"keine Meldung\").slice(0, 300),\n  \"ausfuehrung_link\": $json.execution?.url ?? \"\",\n  \"modus\": $json.execution?.mode ?? \"\"\n}\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        288,
+        352
+      ],
+      "id": "0f503c44-e7f3-4be8-827c-72c3ff64a829",
+      "name": "Fehlerdaten"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "NOTION_DATENBANK_ID_OFFENE_FREIGABEN",
+          "mode": "id"
+        },
+        "title": "={{ $json.ticket_id }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Ticket ID|title",
+              "title": "={{ $json.ticket_id }}"
+            },
+            {
+              "key": "erstellt am|date",
+              "date": "={{ $json.zeitpunkt }}"
+            },
+            {
+              "key": "Problem|rich_text",
+              "textContent": "=Störung in „{{ $json.fehler_node }}“: {{ $json.fehlermeldung }}"
+            },
+            {
+              "key": "Formular-Link|url",
+              "urlValue": "={{ $json.ausfuehrung_link }}"
+            },
+            {
+              "key": "Status|select",
+              "selectValue": "offen"
+            },
+            {
+              "key": "Art|select",
+              "selectValue": "Störung"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        528,
+        352
+      ],
+      "id": "857727c8-1c92-45c3-a240-acb4e4f96d36",
+      "name": "Create a database page - Störung"
+    },
+    {
+      "parameters": {
+        "fromEmail": "ki-assistent@example.com",
+        "toEmail": "servicedesk@example.com",
+        "subject": "=Störung KI-Assistent – {{ $('Fehlerdaten').first().json.ticket_id }} – bitte manuell bearbeiten",
+        "emailFormat": "text",
+        "text": "=Störung im KI-Assistenten – bitte manuell bearbeiten\n\nTicket: {{ $('Fehlerdaten').first().json.ticket_id }}\nZeitpunkt: {{ $('Fehlerdaten').first().json.zeitpunkt }}\nWorkflow: {{ $('Fehlerdaten').first().json.workflow }}\nFehler in Node: {{ $('Fehlerdaten').first().json.fehler_node }}\nMeldung: {{ $('Fehlerdaten').first().json.fehlermeldung }}\nAusführung: {{ $('Fehlerdaten').first().json.ausfuehrung_link }}\n\nBis zur Behebung gilt der manuelle E-Mail-Prozess.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        768,
+        352
+      ],
+      "id": "2fa8c1af-fce5-42cb-bc96-25c94a07312a",
+      "name": "Mail an Service Desk (Störung)",
+      "webhookId": "0518f8c2-f3d8-449e-9b04-8928c9f45e2b",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "content": "## Fehler-Fallback\nStartet, wenn der Hauptworkflow abbricht.\n\n1. Fehlerdaten auslesen (ohne Anfragedaten / Namen)\n2. Eintrag in Notion „Offene Freigaben“ mit Art = Störung und Link zur Ausführung\n3. Mail an Service Desk (deaktiviert, kein Postfach angebunden)\n\nDanach greift der manuelle E-Mail-Prozess.",
+        "height": 300,
+        "width": 420,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "af648122-751e-4c81-9b45-a101659f8009",
+      "name": "Sticky Note"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fehlerdaten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fehlerdaten": {
+      "main": [
+        [
+          {
+            "node": "Create a database page - Störung",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a database page - Störung": {
+      "main": [
+        [
+          {
+            "node": "Mail an Service Desk (Störung)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "tags": []
+}
