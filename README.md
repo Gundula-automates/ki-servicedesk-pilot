@@ -69,7 +69,7 @@ Aus fünf Optionen (u. a. zusätzliche Stellen, reines Portal, reiner KI-Assiste
 ## Ablauf
 
 ```mermaid
-flowchart LR
+flowchart TD
     A[Anfrage per Formular] --> B{Sensibel?}
     B -- ja --> V[Vertrauliche Mail an Service Desk<br/>ohne KI]
     B -- nein --> C[Notion-Suche:<br/>freigegebene Artikel]
